@@ -1,0 +1,831 @@
+####################################################################
+
+## Soil nutrient amendment increases the potential for inter-kingdom resource
+## competition among foliar endophytes
+
+## ANALYSIS & VISUALIZATION
+
+## Author: Zoe A. Hansen
+
+######################################################################
+# Load Libraries and Create GGPlot Theme 
+######################################################################
+
+# data and organization
+library(tidyverse); library(readxl); library(magrittr); library(reshape2)
+
+# analysis
+library(vegan); library(iNEXT); library(ellipse); library(car); library(multcomp); library(emmeans); 
+library(lme4); library(lmerTest); library(piecewiseSEM)
+
+# visualization
+library(ggplot2); library(ggpubr); library(ggthemes); library(RColorBrewer); library(cowplot); 
+library(ggrepel); library(stargazer); library(ggsci); library(viridis); library(rstatix); 
+library(ggExtra); library(calibrate);library(pals); library(gridExtra); library(ComplexHeatmap); 
+library(ape)
+
+zoe_theme <- list(theme_bw(base_size = 10),
+                  theme(legend.position = 'none',
+                        axis.line = element_line(colour = 'black'),
+                        axis.text.x=element_text(size=12),
+                        axis.text.y=element_text(size=12),
+                        axis.title=element_text(size=14,face="bold"),
+                        plot.title = element_text(size=14, face='bold', hjust=0.5),
+                        strip.text.y = element_text(size = 12),
+                        strip.text.x = element_text(size = 12),
+                        panel.spacing.x = unit(1, 'lines')))
+
+colors.cn <- c('cornflowerblue','brown2')
+
+
+######################################################################
+# Taxonomic Composition of Bacterial and Fungal Endophytes
+######################################################################
+
+setwd()
+
+# Isolate Taxonomy (based on 16S and ITS)
+taxa.data <- read_xlsx('endophytes_taxonomy_data.xlsx', sheet = 1)
+
+# convert characters to factors
+taxa.data <- taxa.data %>% mutate_all(as.factor)
+b.taxa <- subset(taxa.data, kingdom=='bacteria')
+f.taxa <- subset(taxa.data, kingdom=='fungi')
+
+# Plotting relative abundance of bacterial and fungal endophytes
+
+b.rel.abd <- ggplot(b.taxa, aes(x=treatment, fill=genus)) +
+  geom_bar(position = 'fill', color='black', width = .9) +
+  scale_fill_manual(values=unname(stepped3()))+ 
+  theme_bw() +
+  theme(legend.position = 'right') +
+  labs(x='', y='Relative Abundance\n', fill='Genus')  +
+  scale_x_discrete(labels=c('Control','NPK')) +
+  zoe_theme+
+  annotate("text", x = 1, y = 0.70, label = "Bacillus:\n64%", color = "black", size=3)+
+  annotate("text", x = 2, y = 0.68, label = "Bacillus:\n67%", color = "black", size=3)+
+  annotate("text", x = 1, y = 0.30, label = "Brevibacillus:\n9%", color = "black", size=3)+
+  annotate("text", x = 2, y = 0.075, label = "Pantoea:\n8%", color = "black", size=3)
+
+f.rel.abd <- ggplot(f.taxa, aes(x=treatment, fill=genus)) +
+  geom_bar(position = 'fill', color='black', width=.9) +
+  scale_fill_manual(values=unname(stepped()))+
+  theme_bw() +
+  theme(legend.position = 'right') +
+  labs(x='', y='Relative Abundance\n', fill='Genus') +
+  scale_x_discrete(labels=c('Control','NPK')) +
+  zoe_theme+
+  annotate("text", x = 1, y = 0.58, label = "Fusarium:\n22%", color = "black", size=3)+
+  annotate("text", x = 1, y = 0.36, label = "Neocosmospora:\n12%", color = "black",size=3)+
+  annotate("text", x = 1, y = 0.20, label = "Penicillium:\n17%", color = "black",size=3)+
+  annotate("text", x = 2, y = 0.42, label = "Penicillium:\n33%", color = "black",size=3)+
+  annotate("text", x = 1, y = 0.82, label = "Aspergillus:\n28%", color = "black",size=3)+
+  annotate("text", x = 2, y = 0.90, label = "Aspergillus:\n18%", color = "black",size=3)+
+  annotate("text", x = 1, y = 0.04, label = "Trichoderma:\n8%", color = "black",size=3)+
+  annotate("text", x = 2, y = 0.09, label = "Trichoderma:\n17%", color = "black",size=3)+
+  annotate("text", x = 2, y = 0.73, label = "Daldinia:\n8%", color = "black",size=3)
+
+ra_comb <- ggarrange(b.rel.abd,f.rel.abd + rremove('ylab'),widths=c(1.1,1),ncol=2, nrow=1,labels=c('A','B'))
+
+ggsave("relative_abundance_B&F_w_genera.png",width = 25, height = 18,units = "cm", dpi = 300, device = 'png')
+
+
+
+
+######################################################################
+# Carbon Substrate Use - Average Optical Density
+######################################################################
+
+avg.od.all <- read_csv('endophytes_nutrients_ods_averages.csv')
+
+avg.od.b <- avg.od.all %>%
+  select(nutrient, bacto_ctrl_avg_od, bacto_npk_avg_od)
+
+avg.od.f <- avg.od.all %>%
+  select(nutrient, fun_ctrl_avg_od, fun_npk_avg_od)
+
+
+### Wilcoxon Rank Sum Test - Comparing Carbon Use
+
+# Bacteria vs Fungi
+wilcox.test(avg.od.all$bacto_all_avg_od, avg.od.all$fun_all_avg_od)
+wilcox.test(avg.od.all$bacto_all_avg_od_nz, avg.od.all$fun_all_avg_od_nz)
+
+# Bacteria: Control vs NPK
+wilcox.test(avg.od.all$bacto_ctrl_avg_od, avg.od.all$bacto_npk_avg_od)
+wilcox.test(avg.od.all$bacto_ctrl_avg_od_nz, avg.od.all$bacto_npk_avg_od_nz)
+
+# Fungi: Control vs NPK
+wilcox.test(avg.od.all$fun_ctrl_avg_od, avg.od.all$fun_npk_avg_od)
+wilcox.test(avg.od.all$fun_ctrl_avg_od_nz, avg.od.all$fun_npk_avg_od_nz)
+
+
+# Bacteria #
+avg.od.b.long=melt(avg.od.b, id.vars=c('nutrient'),variable.name = 'trt')
+
+bact.od.ordered <- avg.od.b.long %>%
+  group_by(nutrient, trt)%>%
+  summarise_each(funs(mean))%>%
+  ungroup()%>%
+  arrange(desc(value))
+
+bact.od.ordered$trt <- gsub('bacto_npk_avg_od', 'NPK', bact.od.ordered$trt)
+bact.od.ordered$trt <- gsub('bacto_ctrl_avg_od', 'Control', bact.od.ordered$trt)
+
+bact.od.plot <- ggplot(data = bact.od.ordered, aes(x = reorder(nutrient, -value), y = value, fill = trt))+
+  geom_bar(stat = 'identity', width = 0.9, position = 'dodge', alpha=0.7)+
+  geom_hline(yintercept = 0.098, col = "cornflowerblue")+
+  geom_hline(yintercept=0.107, col = "brown2")+
+  scale_fill_manual(values=colors.cn)+
+  scale_y_continuous(expand = c(0.01,0))+
+  zoe_theme+
+  guides(fill=guide_legend(nrow=2))+
+  annotate('text', x=90, y=0.125, label="bar(x)[NPK]==0.107",color='brown2', size=4, parse=T)+
+  annotate('text', x=90, y=0.080, label="bar(x)[control]==0.098",color='cornflowerblue', size=4, parse=T)+
+  labs(title='Bacteria', fill = 'Treatment')+
+  ylab('Average OD\n')+
+  xlab('Carbon Source')
+
+
+# Fungi #
+
+avg.od.f.long=melt(avg.od.f,id.vars=c('nutrient'),variable.name = 'trt')
+
+fun.od.ordered <- avg.od.f.long %>%
+  group_by(nutrient, trt)%>%
+  summarise_each(funs(mean))%>%
+  ungroup()%>%
+  arrange(desc(value))
+
+fun.od.ordered$trt <- gsub('fun_npk_avg_od', 'NPK', fun.od.ordered$trt)
+fun.od.ordered$trt <- gsub('fun_ctrl_avg_od', 'Control', fun.od.ordered$trt)
+
+fun.od.plot <- ggplot(data = fun.od.ordered, aes(x = reorder(nutrient, -value), y = value, fill = trt))+
+  geom_bar(stat = 'identity', width = 0.9, position = 'dodge', alpha=0.7)+
+  geom_hline(yintercept = 0.273, col = "cornflowerblue")+
+  geom_hline(yintercept=0.217, col = "brown2")+
+  scale_fill_manual(values=colors.cn)+
+  scale_y_continuous(expand = c(0.01,0))+
+  zoe_theme+
+  guides(fill=guide_legend(nrow=2))+
+  annotate('text', x=90, y=0.190, label="bar(x)[NPK]==0.217", color='brown2', size=4, parse=T)+
+  annotate('text', x=90, y=0.300, label="bar(x)[control]==0.273",color='cornflowerblue', size=4, parse=T)+
+  labs(fill = 'Treatment', title='Fungi')+
+  ylab('Average OD\n')+
+  xlab('Carbon Substrate')
+
+
+b.f.od.plot <- plot_grid(bact.od.plot+rremove('xlab'),fun.od.plot,ncol=1, nrow=2)
+
+ggsave('desc_od_nutrient_use_B&F_combined_wMeans.png',plot=b.f.od.plot,width=30, height=29,units='cm',dpi=300, device='png')
+
+
+######################################################################
+# Carbon Substrate Use - Importing BIOLOG Data
+######################################################################
+
+biolog <- read_csv('endophytes_ods_all_substrates.csv', header=TRUE)
+biolog$type <- as.factor(biolog$type)
+biolog$trt <- as.factor(biolog$trt)
+biolog$leaf <- as.factor(biolog$leaf)
+biolog$Isolate <- as.factor(biolog$Isolate)
+
+biolog <- biolog %>%
+  mutate_if(., is.character, as.numeric)%>%
+  replace(., is.na(.), 0)
+
+
+######################################################################
+# Carbon Substrate Use - Evenness
+######################################################################
+
+# Determine evenness of growth across nutrients to investigate specialization vs. 
+# generalization patterns
+
+# Richness (used nutrients = niche width)
+nut.rich = specnumber(biolog[,-c(1:5)])
+
+# Shannon diversity
+nut.shan = diversity(biolog[,-c(1:5)], index = 'shannon')
+
+# Pielou's Evenness Index
+nut.even = nut.shan/log(nut.rich)
+
+# Create dataframe with nutrient diversity metrics
+nut.div <- tibble(biolog$type,biolog$trt,biolog$leaf,biolog$genus,biolog$Isolate, nut.rich, nut.shan, nut.even)
+colnames(nut.div) <- c('type','trt','leaf','genus','Isolate','Richness','Shannon','Evenness')
+
+##Remove bacterial outliers (from NPK-amended treatment) ##
+
+nut.div.filt <- nut.div %>%
+  filter(Evenness > 0.82)
+
+nut.div.filt.trt.means <- nut.div.filt %>%
+  dplyr::group_by(type, trt) %>%
+  dplyr::summarise(MeanRich = mean(Richness), MeanShannon = mean(Shannon),MeanEven = mean(Evenness)) 
+
+## Wilcoxon ##
+nut.div.filt.wilcox <- nut.div.filt %>%
+  group_by(type)%>%
+  wilcox_test(data=., Evenness ~ trt, paired=FALSE)%>%
+  adjust_pvalue(method="BH")%>%
+  add_significance("p.adj")
+
+nut.div.filt.wilcox <- nut.div.filt.wilcox %>%
+  add_xy_position(x='trt')
+
+# Plotting Evenness Index - Boxplot with Wilcoxon Results
+nut.filt.evenness.plot <- ggplot(data=nut.div.filt, aes(x=trt, y=Evenness))+
+  geom_boxplot(aes(color=trt, fill=trt), alpha=0.2, outlier.shape=NA) + 
+  geom_jitter(aes(color=trt, shape=trt))+
+  facet_wrap(~type) +
+  scale_color_manual(values=colors.cn) +
+  scale_fill_manual(values=colors.cn)+
+  zoe_theme+
+  labs(x = '\nTreatment',y ='Pielou Evenness\n')+
+  scale_x_discrete("Treatment", labels=c('C'='Control','N'='NPK'))+
+  stat_pvalue_manual(nut.div.filt.wilcox, label = "p.adj.signif",hide.ns=FALSE, tip.length = 0.01,bracket.nudge.y = 0.02, size=5)
+
+ggsave("nutrient_use_evenness_BACTERIA_&_FUNGI_outliers_rm_change_scale.png", 
+       plot=nut.filt.evenness.plot,
+       width=30, height=18,
+       units='cm', dpi=300, device='png')
+
+
+######################################################################
+# Carbon Substrate Use - Niche Width, Total Growth, Growth Efficiency
+######################################################################
+
+### Calculating Niche Width, Growth Efficiency, Total Growth ###
+
+metrics <- biolog %>%
+  mutate(niche.width = rowSums(.[5:99]!=0))%>%
+  mutate(total.growth = rowSums(.[5:99]))%>%
+  mutate(growth.eff = .$total.growth / .$niche.width)%>%
+  dplyr::select(type, trt, leaf, Isolate, niche.width, total.growth, growth.eff)
+
+### NICHE WIDTH ###
+
+# GLM for Niche Width #
+width.glm <- glmer(niche.width ~ type*trt + (1|leaf), data=metrics, family=poisson)
+summary(width.glm)
+width.II.anova <- Anova(width.glm, type="II")
+
+width.emm <- emmeans(width.glm, ~type*trt, type='response')
+pairs(width.emm, adjust='none')
+plot(width.emm)
+
+# Means to plot - Boxplot with GLM output
+nw.means.to.plot <- tibble::tribble(
+  ~group1,~group2,  ~p.adj,  ~p.signif,    ~y.position,   ~type,
+  "C",    "N",      0.0540,     "ns",           100,      "Bacteria",
+  "C",    "N",      0.0001,     "***",          105,        "Fungi")
+
+nw.plot<- ggplot(data=metrics, aes(x=trt, y=niche.width))+
+  geom_boxplot(alpha=0.5, aes(fill=trt), outlier.shape = NA)+
+  geom_jitter(aes(shape=type, color=trt))+
+  scale_color_manual(values=colors.cn) +
+  scale_fill_manual(values=colors.cn)+
+  facet_wrap(~type) +
+  zoe_theme+
+  labs(x = '\nTreatment',y = 'Niche Width\n')+
+  scale_x_discrete("Treatment", labels=c('C'='Control','N'='NPK'))+
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))+
+  stat_pvalue_manual(nw.means.to.plot,   label = "p.signif", tip.length = 0.01,bracket.nudge.y = 1, size=5)
+
+
+### TOTAL GROWTH ###
+
+# LM for Total Growth #
+total.lm <- lmer(log(total.growth)~type*trt + (1|leaf), data=metrics)
+summary(total.lm)
+total.II.anova <- Anova(total.lm, type="II")
+
+total.emm <- emmeans(total.lm, ~type*trt, type='response')
+pairs(total.emm, adjust='none')
+plot(total.emm)
+
+
+# Means to plot - Boxplot with LM output
+tg.means.to.plot <- tibble::tribble(
+  ~group1,~group2,  ~p.adj,  ~p.signif,    ~y.position,   ~type,
+  "C",    "N",      0.393,     "ns",           27,      "Bacteria",
+  "C",    "N",      0.0102,     "*",          67,        "Fungi")
+
+tg.plot<- ggplot(data=metrics, aes(x=trt, y=total.growth))+
+  geom_boxplot(alpha=0.5, aes(fill=trt), outlier.shape = NA)+
+  geom_jitter(aes(shape=type, color=trt))+
+  scale_color_manual(values=colors.cn) +
+  scale_fill_manual(values=colors.cn)+
+  facet_wrap(~type) +
+  zoe_theme+
+  labs(x = '\nTreatment',y = 'Total Growth\n')+
+  scale_x_discrete("Treatment", labels=c('C'='Control','N'='NPK'))+
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.08)))+
+  stat_pvalue_manual(tg.means.to.plot,   label = "p.signif", tip.length = 0.01,bracket.nudge.y = 1, size=5)
+
+
+### GROWTH EFFICIENCY ###
+
+# LM for Growth Efficiency
+ge.lm <- lmer(log(growth.eff)~type*trt + (1|leaf), data=metrics)
+summary(ge.lm)
+Anova(ge.lm, type='II')
+
+ge.emm <- emmeans(ge.lm, ~type*trt, type='response')
+pairs(ge.emm, adjust='none')
+cld.ge<- cld(ge.emm, adjust = 'Tukey', Letters = trimws('abcdefghijklm'), reversed = T)
+plot(ge.emm)
+
+# Means to plot - Boxplot with LM output
+means.to.plot.ge <- tibble::tribble(
+  ~group1,~group2,  ~p.adj,  ~p.signif,    ~y.position,   ~type,
+  "C",    "N",      0.389,     "ns",           0.32,      "Bacteria",
+  "C",    "N",      0.0535,     "ns",          0.78,        "Fungi")
+
+ge.plot<- ggplot(data=metrics, aes(x=trt, y=growth.eff))+
+  geom_boxplot(alpha=0.5, aes(fill=trt),outlier.shape = NA)+
+  geom_jitter(aes(shape=type, color=trt))+
+  scale_color_manual(values=colors.cn) +
+  scale_fill_manual(values=colors.cn)+
+  facet_wrap(~type) +
+  zoe_theme+
+  labs(x = '\nTreatment',y = 'Growth Efficiency\n')+
+  scale_x_discrete("Treatment", labels=c('C'='Control','N'='NPK'))+
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.08)))+
+  stat_pvalue_manual(means.to.plot.ge,   label = "p.signif", tip.length = 0.01,bracket.nudge.y = 0.05, size=5)
+
+
+######################################################################
+# Carbon Substrate Use - Dissimilarity of Carbon Use Profiles
+######################################################################
+
+### Determine distance/dissimilarity of nutrient use profiles among B&F in Control vs. NPK
+
+biolog.dist <- biolog[5:ncol(biolog)] %>%
+  vegdist(method='bray')
+
+biolog.dist2 <- biolog.dist %>%
+  wisconsin(.) 
+
+### Nonmetric Multidimensional Scaling ###
+
+biolog.nmds <- metaMDS(biolog.dist2,distance = 'bray',k=2, try=100, trymax=1000)
+
+goodness(biolog.nmds)
+stressplot(biolog.nmds)
+
+# Setup for NMDS
+biolog.nmds.points <- data.frame(biolog.nmds$points)
+biolog.nmds.points$trt <- as.factor(biolog$trt)
+biolog.nmds.points$type <- as.factor(biolog$type)
+
+biolog.nmds.points$type.trt[biolog.nmds.points$type=='Bacteria' &
+                              biolog.nmds.points$trt=='N']='Bacteria-NPK'
+biolog.nmds.points$type.trt[biolog.nmds.points$type=='Bacteria'&
+                              biolog.nmds.points$trt=='C']='Bacteria-Control'
+biolog.nmds.points$type.trt[biolog.nmds.points$type=='Fungi' &
+                              biolog.nmds.points$trt=='N']='Fungi-NPK'
+biolog.nmds.points$type.trt[biolog.nmds.points$type=='Fungi'&
+                              biolog.nmds.points$trt=='C']='Fungi-Control'
+biolog.nmds.points$type.trt <- as.factor(biolog.nmds.points$type.trt)
+
+
+# Plotting NMDS
+colors.type.trt <- c('cornflowerblue','brown2','cornflowerblue','brown2')
+
+bio.nmds.ggplot <- biolog.nmds.points %>%
+  ggplot(., aes(x=MDS1, y=MDS2, color=trt, shape=type, fill=trt)) +
+  geom_point(size=3) +
+  stat_ellipse(aes(x=MDS1, y=MDS2, color=trt, group=type.trt),type = "t", size=1) +
+  theme_pubr(legend = 'right') +
+  zoe_theme+
+  scale_color_manual(values = colors.cn, labels=c("Control","NPK")) +
+  scale_fill_manual(values=colors.cn, labels=c("Control","NPK"))+
+  labs(x='NMDS1', y='NMDS2',color='Treatment', fill='Treatment',shape='Kingdom')
+
+
+######################################################################
+# Carbon Substrate Use - Plotting Growth Metrics in Combined Plot
+######################################################################
+
+all.growth.comb <- ggarrange(nw.plot + rremove('xlab'),ge.plot,tg.plot,bio.nmds.ggplot,nrow=2, ncol=2,labels=c('A','C','B','D'))
+
+ggsave("growth_metrics_&_NMDS_combined_20240516.png",plot=all.growth.comb,width=40, height=30, units='cm', dpi=300, device='png')
+
+######################################################################
+# Carbon Substrate Use - PERMANOVA & PERMDISP
+######################################################################
+
+set.seed(1109)
+
+niche.permanova <- adonis2(biolog.dist2 ~ trt * type, data=biolog, permutations = 999)
+
+niche.disper <- betadisper(d = biolog.dist, group = biolog$type)
+permutest(niche.disper)
+
+plot(niche.disper, ellipse=T, hull=F)
+anova(niche.disper)
+boxplot(niche.disper)
+TukeyHSD(niche.disper)
+
+######################################################################
+# Niche Overlap
+######################################################################
+
+# Read in Niche Overlap values (generated externally by Dr. Matthew Michalska-Smith) #
+pairwise.no <- read_csv('pairwise_niche_overlap.csv')
+
+pairwise.no$type_x <- as.factor(pairwise.no$type_x)
+pairwise.no$treatment_x <- as.factor(pairwise.no$treatment_x)
+pairwise.no$leaf_x <- as.factor(pairwise.no$leaf_x)
+pairwise.no$isolate_x <- as.factor(pairwise.no$isolate_x)
+pairwise.no$type_y <- as.factor(pairwise.no$type_y)
+pairwise.no$treatment_y <- as.factor(pairwise.no$treatment_y)
+pairwise.no$leaf_y <- as.factor(pairwise.no$leaf_y)
+pairwise.no$isolate_y <- as.factor(pairwise.no$isolate_y)
+
+## B:B and F:F ###
+bb_ff.symp.no <- pairwise.no %>%
+  filter(type_x == type_y)
+
+bb_ff.symp.no <- bb_ff.symp.no %>%
+  filter(leaf_x == leaf_y)%>%
+  rename(treatment=treatment_x, leaf=leaf_x)%>%
+  {bind_rows(
+    mutate(., treatment, leaf, type_x, type_y, x=isolate_x, y=isolate_y, overlap=x_on_y_pw, .keep="none"),
+    mutate(., treatment, leaf, type_x, type_y, x=isolate_y, y=isolate_x, overlap=y_on_x_pw, .keep="none")
+  )}
+
+bb_ff.symp.no$type_comp[bb_ff.symp.no$type_x == 'bacto' & bb_ff.symp.no$type_y == 'bacto']= 'B:B'
+bb_ff.symp.no$type_comp[bb_ff.symp.no$type_x == 'fungi' & bb_ff.symp.no$type_y == 'fungi']= 'F:F'
+
+bb_ff.symp.no.summary <- bb_ff.symp.no %>%
+  dplyr::group_by(treatment, x, type_comp)%>%
+  dplyr::summarise(MeanOutgoing=mean(overlap))
+
+### Calculating Means ###
+bb_ff.symp.no.summary.stats <- bb_ff.symp.no.summary %>%
+  group_by(type_comp,treatment)%>%
+  summarise(MeanOut=mean(MeanOutgoing))
+
+bb_ff.symp.no.summary %>%
+  group_by(treatment, type_comp)%>%
+  shapiro_test(MeanOutgoing)
+
+### Wilcoxon (for all B:B and F:F comparisons)
+bb_ff.symp.out.no.wilcox <- bb_ff.symp.no.summary %>%
+  group_by(type_comp)%>%
+  wilcox_test(data=., MeanOutgoing ~ treatment, paired=FALSE)%>%
+  adjust_pvalue(method="BH")%>%
+  add_significance("p.adj")
+
+## Histogram  - B:B & F:F ## 
+
+# B:B
+symp.hist.bb <-bb_ff.symp.no.summary %>%
+  filter(type_comp == 'B:B')%>%
+  ggplot(.,aes(x=MeanOutgoing, fill=treatment))+
+  geom_histogram(aes(y=..density..),alpha=0.6, position='dodge', binwidth=0.05)+
+  scale_fill_manual(values=c('cornflowerblue','brown2'))+
+  scale_color_manual(values=c('white','white'))+
+  scale_x_continuous(breaks=seq(0,1, 0.25))+
+  coord_cartesian(xlim=c(0,1),ylim=c(0,5))+
+  facet_wrap(~type_comp)+
+  zoe_theme+
+  geom_segment(x=0.6597, xend=0.6597, y=0, yend=Inf, col = "cornflowerblue", size=2,lty='11')+
+  geom_segment(x=0.6605, xend=0.6605, y=0, yend=Inf, col = "brown2",size=2,lty='11')+
+  labs(x='\nMean Sympatric Outgoing Niche Overlap',y='Number of Isolates\n',fill='Treatment',color='Treatment')
+
+# F:F
+symp.hist.ff <-bb_ff.symp.no.summary %>%
+  filter(type_comp == 'F:F')%>%
+  ggplot(.,aes(x=MeanOutgoing, fill=treatment))+
+  geom_histogram(aes(y=..density..),alpha=0.6, position='dodge', binwidth=0.05)+
+  scale_fill_manual(values=c('cornflowerblue','brown2'))+
+  scale_color_manual(values=c('white','white'))+
+  scale_x_continuous(breaks=seq(0,1, 0.25))+
+  coord_cartesian(xlim=c(0,1),ylim=c(0,5))+
+  facet_wrap(~type_comp)+
+  zoe_theme+
+  geom_segment(x=0.724, xend=0.724, y=0, yend=Inf, col = "cornflowerblue", size=2,lty='11')+
+  geom_segment(x=0.656, xend=0.656, y=0, yend=Inf, col = "brown2",size=2,lty='11')+
+  labs(x='\nMean Sympatric Outgoing Niche Overlap',y='Number of Isolates\n',fill='Treatment',color='Treatment')
+
+bb.ff.symp.no.comb <- ggarrange(symp.hist.bb + rremove('ylab') + rremove('xlab'),symp.hist.ff + rremove('ylab'),nrow=2, ncol=1,legend="none")
+
+
+## B:F and F:B ##
+
+bf_fb.symp.no <- pairwise.no %>%
+  filter(type_x != type_y)
+
+bf_fb.symp.no <- bf_fb.symp.no %>%
+  filter(leaf_x == leaf_y)%>%
+  rename(treatment=treatment_x, leaf=leaf_x)%>%
+  {bind_rows(
+    mutate(., treatment, leaf, type_comp='B:F', x=isolate_x, y=isolate_y, overlap=x_on_y_pw, .keep="none"),
+    mutate(., treatment, leaf, type_comp='F:B', x=isolate_y, y=isolate_x, overlap=y_on_x_pw, .keep="none")
+  )}
+
+bf_fb.symp.no.summary <- bf_fb.symp.no %>%
+  dplyr::group_by(treatment, x, type_comp)%>%
+  dplyr::summarise(MeanOutgoing=mean(overlap))
+
+### Calculating Means ###
+
+bf_fb.symp.no.summary.stats <- bf_fb.symp.no.summary %>%
+  group_by(type_comp,treatment)%>%
+  summarise(MeanOut=mean(MeanOutgoing))
+
+bf_fb.symp.no.summary %>%
+  group_by(treatment, type_comp)%>%
+  shapiro_test(MeanOutgoing)
+
+### T-test (for B:F comparisons)
+bf_fb.symp.out.no.t <- bf_fb.symp.no.summary %>%
+  filter(type_comp == 'B:F')%>%
+  group_by(type_comp)%>%
+  t_test(data=.,MeanOutgoing ~ treatment, paired=FALSE)%>%
+  adjust_pvalue(method="BH")%>%
+  add_significance("p.adj")
+
+### Wilcoxon (for F:B comparisons)
+bf_fb.symp.out.no.wilcox <- bf_fb.symp.no.summary %>%
+  filter(type_comp == 'F:B')%>%
+  group_by(type_comp)%>%
+  wilcox_test(data=.,MeanOutgoing ~ treatment, paired=FALSE)%>%
+  adjust_pvalue(method="BH")%>%
+  add_significance("p.adj")
+
+## Histogram  - B:F & F:B ##
+
+# B:F
+symp.hist.bf <-bf_fb.symp.no.summary %>%
+  filter(type_comp == 'B:F')%>%
+  ggplot(.,aes(x=MeanOutgoing, fill=treatment))+
+  geom_histogram(aes(y=..density..),alpha=0.6, position='dodge', binwidth=0.05)+
+  scale_fill_manual(values=c('cornflowerblue','brown2'))+
+  scale_color_manual(values=c('white','white'))+
+  scale_x_continuous(breaks=seq(0,1, 0.25))+
+  coord_cartesian(xlim=c(0,1),ylim=c(0,8))+
+  facet_wrap(~type_comp)+
+  zoe_theme+
+  geom_segment(x=0.408, xend=0.408, y=0, yend=Inf, col = "cornflowerblue", size=2,lty='11')+
+  geom_segment(x=0.494, xend=0.494, y=0, yend=Inf, col = "brown2",size=2,lty='11')+
+  geom_text(data=NULL, x=0.02, y=7.9, label="bar(x)[control]==0.408",color='cornflowerblue', size=5, hjust=0, parse=T, check_overlap=T)+
+  geom_text(data=NULL, x=0.02, y=7.2, label="bar(x)[NPK]==0.494",color='brown2', size=5, hjust=0, parse=T, check_overlap = T)+
+  labs(x='\nMean Sympatric Outgoing Niche Overlap',y='Number of Isolates\n',fill='Treatment',color='Treatment')
+
+# F:B
+symp.hist.fb <-bf_fb.symp.no.summary %>%
+  filter(type_comp == 'F:B')%>%
+  ggplot(.,aes(x=MeanOutgoing, fill=treatment))+
+  geom_histogram(aes(y=..density..),alpha=0.6, position='dodge', binwidth=0.05)+
+  scale_fill_manual(values=c('cornflowerblue','brown2'))+
+  scale_color_manual(values=c('white','white'))+
+  scale_x_continuous(breaks=seq(0,1, 0.25))+
+  coord_cartesian(xlim=c(0,1),ylim=c(0,8))+
+  facet_wrap(~type_comp)+
+  zoe_theme+
+  geom_segment(x=0.835, xend=0.835, y=0, yend=Inf, col = "cornflowerblue", size=2,lty='11')+
+  geom_segment(x=0.731, xend=0.731, y=0, yend=Inf, col = "brown2",size=2,lty='11')+
+  geom_text(data=NULL, x=0.02, y=7.9, label="bar(x)[control]==0.835",color='cornflowerblue', size=5, hjust=0, parse=T, check_overlap=T)+
+  geom_text(data=NULL, x=0.02, y=7.2, label="bar(x)[NPK]==0.731",color='brown2', size=5, hjust=0, parse=T, check_overlap = T)+
+  labs(x='\nMean Sympatric Outgoing Niche Overlap',y='Number of Isolates\n',fill='Treatment',color='Treatment')
+
+bf.fb.symp.no.comb <- ggarrange(symp.hist.bf + rremove('xlab'),symp.hist.fb, nrow=2, ncol=1,legend="none")
+
+
+### Combine all plots for B:B, F:F, B:F, and F:B ###
+
+no.combined.plot.all <- ggarrange(bf.fb.symp.no.comb,bb.ff.symp.no.comb,nrow=1, ncol=2,widths = c(0.60,0.40),labels=c('A','B'))
+
+
+ggsave("sympatric_outgoing_niche_overlap_BF_FB_BB_FF_revised_format_w_BF_Means_20240426.png", 
+       plot=no.combined.plot.all,width=25, height=25,units='cm', dpi=300, device='png')
+
+
+######################################################################
+# Phylogenetic Distance VS Carbon Use Distance
+######################################################################
+
+### Calculate nutrient use distances for Bacteria and Fungi in separate treatments ###
+
+# Bacteria 
+bact.biolog <- biolog %>%
+  filter(type == 'Bacteria')
+
+bact.growth.mat <- as.matrix(bact.biolog[, c(5:99)])
+
+bact.growth.2 <- bact.growth.mat[,-1]
+rownames(bact.growth.2) <- bact.growth.mat[,1]
+
+bact.growth.dist <- as.data.frame(bact.growth.2) %>%
+  mutate_all(., function(x) as.numeric(as.character(x)))%>%
+  vegdist(., method='bray')
+
+bact.growth.dist.2 <- wisconsin(bact.growth.dist)
+
+
+# Fungi 
+fungi.biolog <- biolog %>%
+  filter(type == 'Fungi')
+
+fungi.growth.mat<- as.matrix(fungi.biolog[,c(5:99)])
+
+fungi.growth.2 <- fungi.growth.mat[,-1]
+rownames(fungi.growth.2) <- fungi.growth.mat[,1]
+
+fungi.growth.dist <- as.data.frame(fungi.growth.2)%>%
+  mutate_all(., function(x) as.numeric(as.character(x)))%>%
+  vegdist(., method='bray')
+
+fungi.growth.dist.2 <- wisconsin(fungi.growth.dist)
+
+
+### Import phylogenetic distances produced externally ###
+
+# Bacteria 
+bact.pdist <- read_csv('bacteria115_pdist_csv.csv',col_names = T)
+bact.pdist.mat <- as.matrix(bact.pdist[, c(3,5:ncol(bact.pdist))])
+bact.pdist.mat.2 <- bact.pdist.mat[,-1]
+rownames(bact.pdist.mat.2) <- bact.pdist.mat[,1]
+
+# Fungi
+fungi.pdist <- read_csv('fungi120_pdist_csv.csv',col_names = T)
+fungi.pdist.mat<- as.matrix(fungi.pdist[,c(3,5:ncol(fungi.pdist))])
+fungi.pdist.mat.2 <- fungi.pdist.mat[,-1]
+rownames(fungi.pdist.mat.2) <- fungi.pdist.mat[,1]
+
+
+### Pairwise Information for Plotting ###
+
+# Growth Distances
+bact.growth.pairs <- t(combn(colnames(bact.growth.dist.2),2))
+bact.growth.pairs <- data.frame(bact.growth.pairs,dist.growth=bact.growth.dist.2[bact.growth.pairs])
+
+fungi.growth.pairs <- t(combn(colnames(fungi.growth.dist.2),2))
+fungi.growth.pairs <- data.frame(fungi.growth.pairs,dist.growth=fungi.growth.dist.2[fungi.growth.pairs])
+fungi.growth.ordered <- fungi.growth.pairs[order(fungi.growth.pairs$dist.growth, decreasing=TRUE),]
+
+
+# Phylogenetic Distances
+bact.pdist.mat.2[is.na(bact.pdist.mat.2)] <- 0
+bact.pdist.mat.2 <- pmax(bact.pdist.mat.2, t(bact.pdist.mat.2))
+bact.phylo.pairs <- t(combn(colnames(bact.pdist.mat.2), 2))
+bact.phylo.pairs<- data.frame(bact.phylo.pairs,dist.phylo=bact.pdist.mat.2[bact.phylo.pairs])
+
+fungi.pdist.mat.2[is.na(fungi.pdist.mat.2)] <- 0
+fungi.pdist.mat.2 <- pmax(fungi.pdist.mat.2, t(fungi.pdist.mat.2))
+fungi.phylo.pairs <- t(combn(colnames(fungi.pdist.mat.2), 2))
+fungi.phylo.pairs <- data.frame(fungi.phylo.pairs,dist.phylo=fungi.pdist.mat.2[fungi.phylo.pairs])
+fungi.phylo.ordered <- fungi.phylo.pairs[order(fungi.phylo.pairs$dist.phylo, decreasing=TRUE),]
+
+
+### Correlations ###
+
+# BACTERIA # 
+b.dist.table <- merge(bact.growth.pairs, bact.phylo.pairs, by=c('X1','X2'), how="outer")
+b.dist.table$dist.phylo <- as.numeric(b.dist.table$dist.phylo)
+
+b.trt <- biolog %>%
+  filter(type == 'Bacteria')%>%
+  select(Isolate, trt)
+
+b.dist.table.2 <-merge(b.trt, b.dist.table, by.x=c('Isolate'), by.y=c('X2'))
+names(b.dist.table.2) <- c('isolate_2','trt_2','X1','dist.growth','dist.phylo')
+b.dist.table.3 <-merge(b.trt, b.dist.table.2, by.x=c('Isolate'), by.y=c('X1'))
+names(b.dist.table.3) <- c('isolate_1','trt_1','isolate_2','trt_2','dist.growth','dist.phylo')
+
+b.dist.table.3$t_comp <- paste(b.dist.table.3$trt_1, b.dist.table.3$trt_2, sep=":")
+
+b.dist.sub <- subset(b.dist.table.3, t_comp!='N:C')
+b.dist.sub2 <- subset(b.dist.sub, t_comp!='C:N')
+
+b.dist.sub3 <- b.dist.sub2 %>%
+  select(-c(trt_1, trt_2))
+
+b.dist.sub3$t_comp <- as.factor(b.dist.sub3$t_comp)
+
+b.dist.sub.ordered <- b.dist.sub3[order(b.dist.sub3$dist.phylo, decreasing=TRUE),]
+
+b.dist.sub3.n <- b.dist.sub3 %>%
+  filter(t_comp=='N:N')
+b.dist.sub3.c <- b.dist.sub3 %>%
+  filter(t_comp=='C:C')
+
+# Correlation Test #
+b.growth.cor.test <- cor.test(b.dist.sub3$dist.growth, b.dist.sub3$dist.phylo, method='pearson',conf.level=0.95)
+
+b.growth.lm.test <- lm(dist.growth~dist.phylo*t_comp, data = b.dist.sub3)
+summary(b.growth.lm.test)
+anova(b.growth.lm.test)
+
+cor.colors <- c('cornflowerblue','brown4')
+
+b.growth.cor.plot <- ggplot(b.dist.sub3,aes(x=dist.phylo, y=dist.growth,col=t_comp))+
+  geom_point(size=2.8, pch=21, fill='white')+
+  scale_color_manual(values=cor.colors)+
+  geom_smooth(method='lm', se=0.95)+
+  stat_cor(method='pearson',size=5,label.x=0,label.y=0.024,aes(label=paste(..rr.label..,..p.label.., sep='~`,`~')))+
+  stat_regline_equation(size=5, label.x = 0, label.y=0.0225)+
+  facet_wrap(~t_comp, labeller=labeller(t_comp=c('C:C'='Within Control','N:N'='Within NPK')))+
+  zoe_theme+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.001, 0.025))+
+  scale_x_continuous(expand=c(0,0), limits = c(-0.01,0.4))+
+  labs(x='\nPhylogenetic Distance',y='Carbon Use Distance\n',title='Bacteria\n',color='Treatment')
+
+
+# FUNGI
+
+f.dist.table <- merge(fungi.growth.pairs, fungi.phylo.pairs, by=c('X1','X2'), how='outer')
+
+f.dist.table$dist.phylo <- as.numeric(f.dist.table$dist.phylo)
+
+f.trt <- biolog %>%
+  filter(type == 'Fungi')%>%
+  select(Isolate, trt)
+
+f.dist.table.2 <-merge(f.trt, f.dist.table, by.x=c('Isolate'), by.y=c('X2'))
+names(f.dist.table.2) <- c('isolate_2','trt_2','X1','dist.growth','dist.phylo')
+f.dist.table.3 <-merge(f.trt, f.dist.table.2, by.x=c('Isolate'), by.y=c('X1'))
+names(f.dist.table.3) <- c('isolate_1','trt_1','isolate_2','trt_2','dist.growth','dist.phylo')
+
+f.dist.table.3$t_comp <- paste(f.dist.table.3$trt_1, f.dist.table.3$trt_2, sep=":")
+
+f.dist.sub <- subset(f.dist.table.3, t_comp!='N:C')
+f.dist.sub2 <- subset(f.dist.sub, t_comp!='C:N')
+
+f.dist.sub3 <- f.dist.sub2 %>%
+  select(-c(trt_1, trt_2))
+
+f.dist.sub3$t_comp <- as.factor(f.dist.sub3$t_comp)
+
+f.dist.sub.ordered <- f.dist.sub3[order(f.dist.sub3$dist.phylo, decreasing=TRUE),]
+
+f.dist.sub3.n <- f.dist.sub3 %>%
+  filter(t_comp=='N:N')
+f.dist.sub3.c <- f.dist.sub3 %>%
+  filter(t_comp=='C:C')
+
+# Filter out high phylogenetic distances (for plotting purposes) #
+f.dist.filtered <- f.dist.sub3 %>%
+  filter(., dist.phylo < 0.4)
+
+f.filtered.cor.test <- cor.test(f.dist.filtered$dist.growth, f.dist.filtered$dist.phylo)
+
+f.filtered.cor.plot <- ggplot(f.dist.filtered, aes(x=dist.phylo, y=dist.growth,col=t_comp))+
+  geom_point(size=2.8, pch=21, fill='white')+
+  scale_color_manual(values=cor.colors)+
+  facet_wrap(~t_comp,labeller=labeller(t_comp=c('C:C'='Within Control','N:N'='Within NPK')))+
+  geom_smooth(method='lm', se=0.95)+
+  stat_cor(method='pearson', size=5,label.x=c(0,0),label.y=c(0.024),aes(label=paste(..rr.label..,..p.label.., sep='~`,`~')))+
+  stat_regline_equation(size=5,label.x = 0,label.y = 0.0225)+
+  zoe+theme+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.001, 0.025))+
+  scale_x_continuous(expand=c(0,0), limits = c(-0.01,0.4))+
+  labs(x='\nPhylogenetic Distance', y='Carbon Use Distance\n', title='Fungi\n', color='Treatment')
+
+
+# Combine  Correlation Plots #
+
+growth.cor.comb <- ggarrange(b.growth.cor.plot + rremove('xlab'),f.filtered.cor.plot,heights=c(1,1.1),nrow=2, ncol=1)
+
+ggsave('phylodist_vs_growthdist_B&F_FACETbyTRT_wR2_&_Slopes_rmOUTLIERS_20240516.png', 
+       plot=growth.cor.comb,
+       width=22, height=32, 
+       units='cm',dpi=300, device='png')
+
+
+### Extract Slopes and Intercepts and Compare 
+
+# Dataframe with these values
+b.cor.plot.stats <- b.dist.sub3 %>%
+  group_by(t_comp)%>%
+  do({
+    mod=lm(dist.growth ~ dist.phylo, data=.)
+    data.frame(intercept = coef(mod)[1],
+               slope = coef(mod)[2])
+  })
+
+lm.b.dist <- lm(dist.growth ~ dist.phylo*t_comp, data=b.dist.sub3)
+anova(lm.b.dist)
+lm.b.dist$coefficients
+lst.b.dist <- lstrends(lm.b.dist, "t_comp", var="dist.phylo")
+pairs(lst.b.dist)
+
+
+f.filtered.cor.plot.stats <- f.dist.filtered %>%
+  group_by(t_comp)%>%
+  do({
+    mod=lm(dist.growth ~ dist.phylo, data=.)
+    data.frame(intercept = coef(mod)[1],
+               slope = coef(mod)[2])
+  })
+
+lm.f.dist.filt <- lm(dist.growth ~ dist.phylo*t_comp, data=f.dist.filtered)
+anova(lm.f.dist.filt)
+lm.f.dist.filt$coefficients
+lst.f.dist.filt <- lstrends(lm.f.dist.filt, "t_comp", var="dist.phylo")
+pairs(lst.f.dist.filt)
