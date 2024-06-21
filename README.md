@@ -1,11 +1,11 @@
-# PAPER_The_ISME_Journal_2024
+## PAPER_The_ISME_Journal_2024
 
-## Soil nutrient amendment increases the potential for inter-kingdom resource competition among foliar endophytes
+### Soil nutrient amendment increases the potential for inter-kingdom resource competition among foliar endophytes
 
-### Zoe A. Hansen*, Michael R. Fulcher, Nick Wornson, Seth A. Spawn-Lee, Mitch Johnson, Zewei Song, Matthew J. Michalska-Smith, Georgiana May, Eric W. Seabloom, Elizabeth T. Borer, Linda L. Kinkel 
+#### Zoe A. Hansen*, Michael R. Fulcher, Nick Wornson, Seth A. Spawn-Lee, Mitch Johnson, Zewei Song, Matthew J. Michalska-Smith, Georgiana May, Eric W. Seabloom, Elizabeth T. Borer, Linda L. Kinkel 
 
-#### *Correspondence:  
-#### Zoe A. Hansen: hansen.zoeann@gmail.com
+##### *Correspondence:  
+##### Zoe A. Hansen: hansen.zoeann@gmail.com
 
 ### Data Availability
 16S and ITS sequences used for bacterial and fungal identification are available on GenBank under the Accessions MW742398–MW742512 and MW751686–MW751805, respectively.
