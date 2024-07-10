@@ -1,4 +1,4 @@
-## PAPER_The_ISME_Journal_2024
+## PAPER_ISME-Communications_2024
 
 ### Soil nutrient amendment increases the potential for inter-kingdom resource competition among foliar endophytes
 
